@@ -1,0 +1,36 @@
+const ROLES = {
+  SUPER_ADMIN: 'SUPER_ADMIN',
+  BUILDING_MANAGER: 'BUILDING_MANAGER',
+  FACILITY_MANAGER: 'FACILITY_MANAGER',
+  TECHNICIAN: 'TECHNICIAN',
+  VIEWER: 'VIEWER',
+};
+
+const ALL_ROLES = Object.values(ROLES);
+
+const PERMISSIONS = {
+  'buildings:read': ALL_ROLES,
+  'buildings:write': [ROLES.SUPER_ADMIN, ROLES.BUILDING_MANAGER],
+  'buildings:delete': [ROLES.SUPER_ADMIN],
+  'structure:read': ALL_ROLES,
+  'structure:write': [ROLES.SUPER_ADMIN, ROLES.BUILDING_MANAGER],
+  'devices:read': ALL_ROLES,
+  'devices:write': [ROLES.SUPER_ADMIN, ROLES.FACILITY_MANAGER],
+  'devices:update-status': [ROLES.SUPER_ADMIN, ROLES.FACILITY_MANAGER, ROLES.TECHNICIAN],
+  'devices:delete': [ROLES.SUPER_ADMIN, ROLES.FACILITY_MANAGER],
+  'sensors:read': ALL_ROLES,
+  'sensors:write': [ROLES.SUPER_ADMIN, ROLES.FACILITY_MANAGER],
+  'readings:read': ALL_ROLES,
+  'readings:write': [ROLES.SUPER_ADMIN],
+  'alarms:read': ALL_ROLES,
+  'alarms:write': [ROLES.SUPER_ADMIN, ROLES.FACILITY_MANAGER],
+  'alarms:acknowledge': [
+    ROLES.SUPER_ADMIN,
+    ROLES.FACILITY_MANAGER,
+    ROLES.BUILDING_MANAGER,
+    ROLES.TECHNICIAN,
+  ],
+  'users:manage': [ROLES.SUPER_ADMIN],
+};
+
+module.exports = { ROLES, ALL_ROLES, PERMISSIONS };

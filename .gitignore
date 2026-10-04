@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# Build output
+dist/
+dist-ssr/
+.vite/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Editor and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Docker overrides
+docker-compose.override.yml

@@ -1,0 +1,240 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Location rows cascade from a building down to its rooms.
+// Devices, sensors, readings, and alarms use Restrict so history is kept.
+
+enum BuildingStatus {
+  ACTIVE
+  INACTIVE
+
+  @@map("building_status")
+}
+
+enum DeviceStatus {
+  ACTIVE
+  INACTIVE
+
+  @@map("device_status")
+}
+
+enum DeviceType {
+  HVAC
+  LIGHT
+  ENERGY_METER
+  TEMPERATURE_SENSOR
+  HUMIDITY_SENSOR
+  SMOKE_SENSOR
+  MOTION_SENSOR
+  WATER_LEAK_SENSOR
+
+  @@map("device_type")
+}
+
+enum AlarmSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+
+  @@map("alarm_severity")
+}
+
+enum AlarmStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+
+  @@map("alarm_status")
+}
+
+model Building {
+  id          String         @id @default(uuid()) @db.Uuid
+  name        String
+  code        String         @unique
+  address     String
+  description String?
+  status      BuildingStatus @default(ACTIVE)
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  floors Floor[]
+  alarms Alarm[]
+
+  @@map("buildings")
+}
+
+model Floor {
+  id          String   @id @default(uuid()) @db.Uuid
+  buildingId  String   @map("building_id") @db.Uuid
+  name        String
+  floorNumber Int      @map("floor_number")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  building Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  zones    Zone[]
+
+  @@unique([buildingId, floorNumber])
+  @@map("floors")
+}
+
+model Zone {
+  id          String   @id @default(uuid()) @db.Uuid
+  floorId     String   @map("floor_id") @db.Uuid
+  name        String
+  code        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  floor  Floor   @relation(fields: [floorId], references: [id], onDelete: Cascade)
+  rooms  Room[]
+  alarms Alarm[]
+
+  @@unique([floorId, code])
+  @@map("zones")
+}
+
+model Room {
+  id          String   @id @default(uuid()) @db.Uuid
+  zoneId      String   @map("zone_id") @db.Uuid
+  name        String
+  roomNumber  String   @map("room_number")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  zone    Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  devices Device[]
+
+  @@unique([zoneId, roomNumber])
+  @@map("rooms")
+}
+
+model Device {
+  id           String       @id @default(uuid()) @db.Uuid
+  roomId       String       @map("room_id") @db.Uuid
+  name         String
+  deviceCode   String       @unique @map("device_code")
+  deviceType   DeviceType   @map("device_type")
+  manufacturer String?
+  model        String?
+  status       DeviceStatus @default(ACTIVE)
+  installedAt  DateTime?    @map("installed_at") @db.Timestamptz(3)
+  lastSeenAt   DateTime?    @map("last_seen_at") @db.Timestamptz(3)
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  room    Room     @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  sensors Sensor[]
+  alarms  Alarm[]
+
+  @@index([roomId])
+  @@index([deviceType])
+  @@index([status])
+  @@map("devices")
+}
+
+model Sensor {
+  id         String   @id @default(uuid()) @db.Uuid
+  deviceId   String   @map("device_id") @db.Uuid
+  name       String
+  sensorType String   @map("sensor_type")
+  unit       String
+  minValue   Decimal? @map("min_value") @db.Decimal(14, 4)
+  maxValue   Decimal? @map("max_value") @db.Decimal(14, 4)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  device   Device          @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  readings DeviceReading[]
+
+  @@unique([deviceId, name])
+  @@map("sensors")
+}
+
+model DeviceReading {
+  id         BigInt   @id @default(autoincrement())
+  sensorId   String   @map("sensor_id") @db.Uuid
+  value      Decimal  @db.Decimal(14, 4)
+  recordedAt DateTime @map("recorded_at") @db.Timestamptz(3)
+
+  sensor Sensor @relation(fields: [sensorId], references: [id], onDelete: Restrict)
+
+  @@index([sensorId, recordedAt])
+  @@map("device_readings")
+}
+
+model Alarm {
+  id             String        @id @default(uuid()) @db.Uuid
+  deviceId       String        @map("device_id") @db.Uuid
+  buildingId     String        @map("building_id") @db.Uuid
+  zoneId         String?       @map("zone_id") @db.Uuid
+  type           String
+  severity       AlarmSeverity
+  message        String
+  status         AlarmStatus   @default(ACTIVE)
+  triggeredAt    DateTime      @map("triggered_at") @db.Timestamptz(3)
+  acknowledgedAt DateTime?     @map("acknowledged_at") @db.Timestamptz(3)
+  resolvedAt     DateTime?     @map("resolved_at") @db.Timestamptz(3)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  device   Device   @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  building Building @relation(fields: [buildingId], references: [id], onDelete: Restrict)
+  zone     Zone?    @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+
+  @@index([deviceId])
+  @@index([buildingId, status, triggeredAt])
+  @@index([zoneId])
+  @@map("alarms")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  BUILDING_MANAGER
+  FACILITY_MANAGER
+  TECHNICIAN
+  VIEWER
+
+  @@map("user_role")
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         UserRole
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}

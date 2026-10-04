@@ -1,0 +1,91 @@
+name: bms
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bms-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bms_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bms_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-bms}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - bms
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: bms-backend
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bms_user}:${POSTGRES_PASSWORD:-bms_dev_password}@postgres:5432/${POSTGRES_DB:-bms}
+      FRONTEND_URL: http://localhost:${FRONTEND_PORT:-5173}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-only-access-secret-change-before-production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-only-refresh-secret-change-before-production}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      SEED_DEFAULT_PASSWORD: ${SEED_DEFAULT_PASSWORD:-ChangeMe-Dev-Only-1}
+      AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-100}
+      AUTH_RATE_LIMIT_WINDOW_MS: ${AUTH_RATE_LIMIT_WINDOW_MS:-900000}
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    volumes:
+      - ./backend:/app
+      - backend_node_modules:/app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 360s
+    networks:
+      - bms
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: bms-frontend
+    environment:
+      FRONTEND_PORT: 5173
+      API_PROXY_TARGET: http://backend:3000
+      VITE_API_URL: http://localhost:${BACKEND_PORT:-3000}/api/v1
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - bms
+
+networks:
+  bms:
+
+volumes:
+  postgres_data:
+  backend_node_modules:
+  frontend_node_modules:
