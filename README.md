@@ -1,8 +1,10 @@
 # BMS - Building Management System
 
+![Main Office Building, the seeded example used by this project](docs/images/main-office-building.jpg)
+
 Local development runs three Docker services: a React frontend, an Express API, and PostgreSQL. Prisma is the database layer for the API.
 
-The API authenticates users with JWT and checks roles before each protected request. The React app has a login page, protected routes, and a dashboard placeholder. Socket.IO and live sensor readings are not included yet.
+The API authenticates users with JWT and checks roles before each protected request. After login, the app manages the building hierarchy: Building, Floor, Zone, and Room. Devices, sensors, alarms, and energy stay as placeholders. Socket.IO and live sensor readings are not included yet.
 
 ## Architecture
 
@@ -454,7 +456,28 @@ Building search uses `search` for name or code, and `status` for `ACTIVE` or `IN
 
 `SUPER_ADMIN` can create, update, and delete buildings and their structure. `BUILDING_MANAGER` can create and update buildings and manage floors, zones, and rooms. Building deletion stays with `SUPER_ADMIN`. `FACILITY_MANAGER`, `TECHNICIAN`, and `VIEWER` can read the hierarchy. The screens hide actions the role cannot perform. A `403` from the API is still shown as a permission message.
 
-Open Buildings after signing in. The seeded Main Office Building is the example: Ground Floor contains Reception Zone and Server Zone, and First Floor contains Office Zone.
+Open Buildings after signing in. The seeded example is **Main Office Building** (`MAIN`), at 100 Market Street.
+
+| Ground Floor — Reception | Ground Floor — Server Room |
+| --- | --- |
+| ![Reception lobby on the ground floor](docs/images/ground-floor-reception.jpg) | ![Server room in the server zone](docs/images/server-room.jpg) |
+
+| First Floor — Offices |
+| --- |
+| ![Office floor with enclosed offices](docs/images/office-floor.jpg) |
+
+```text
+Main Office Building
+├── Ground Floor
+│   ├── Reception Zone
+│   │   └── Reception
+│   └── Server Zone
+│       └── Server Room
+└── First Floor
+    └── Office Zone
+        ├── Office 101
+        └── Office 102
+```
 
 ## Not in this phase
 
