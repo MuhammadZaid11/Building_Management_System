@@ -404,9 +404,25 @@ a.button {
   font-weight: 700;
 }
 
-.badge-active {
+.badge-active,
+.badge-online {
   background: #e7f4f1;
   color: #0d5c59;
+}
+
+.badge-offline {
+  background: #f8e8e8;
+  color: #8a2424;
+}
+
+.badge-maintenance {
+  background: #f8f1e3;
+  color: #7a5b12;
+}
+
+.badge-disabled {
+  background: #eceff3;
+  color: #4d5968;
 }
 
 .state {

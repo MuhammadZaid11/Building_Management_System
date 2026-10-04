@@ -22,7 +22,7 @@ export default function Sidebar({ open, showSettings, onNavigate }) {
             <li key={link.to}>
               <NavLink
                 to={link.to}
-                end={link.to !== '/buildings'}
+                end={link.to !== '/buildings' && link.to !== '/devices'}
                 onClick={onNavigate}
                 aria-current={link.to === '/buildings' && infrastructure ? 'page' : undefined}
                 className={({ isActive }) => (isActive || (link.to === '/buildings' && infrastructure) ? 'nav-active' : undefined)}

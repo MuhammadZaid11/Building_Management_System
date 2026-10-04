@@ -1,5 +1,13 @@
-export default function StatusBadge({ status }) {
-  const active = status === 'ACTIVE'
+const CLASS_BY_STATUS = {
+  ACTIVE: 'badge-active',
+  ONLINE: 'badge-online',
+  OFFLINE: 'badge-offline',
+  MAINTENANCE: 'badge-maintenance',
+  DISABLED: 'badge-disabled',
+}
 
-  return <span className={active ? 'badge badge-active' : 'badge'}>{status}</span>
+export default function StatusBadge({ status }) {
+  const tone = CLASS_BY_STATUS[status] || ''
+
+  return <span className={tone ? `badge ${tone}` : 'badge'}>{status}</span>
 }

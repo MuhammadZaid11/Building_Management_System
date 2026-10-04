@@ -9,6 +9,8 @@ const idParams = {
 
 const RECORD_STATUSES = ['ACTIVE', 'INACTIVE'];
 
+const DEVICE_STATUSES = ['ONLINE', 'OFFLINE', 'MAINTENANCE', 'DISABLED'];
+
 const DEVICE_TYPES = [
   'HVAC',
   'LIGHT',
@@ -47,6 +49,7 @@ module.exports = {
   paginationQuery,
   idParams,
   RECORD_STATUSES,
+  DEVICE_STATUSES,
   DEVICE_TYPES,
   ALARM_SEVERITIES,
   ALARM_STATUSES,

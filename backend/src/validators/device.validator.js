@@ -1,4 +1,4 @@
-const { paginationQuery, idParams, RECORD_STATUSES, DEVICE_TYPES, text } = require('./common');
+const { paginationQuery, idParams, DEVICE_STATUSES, DEVICE_TYPES, text } = require('./common');
 
 const fields = {
   roomId: { type: 'uuid' },
@@ -7,16 +7,17 @@ const fields = {
   deviceType: { type: 'enum', values: DEVICE_TYPES },
   manufacturer: text({ maxLength: 120, nullable: true }),
   model: text({ maxLength: 120, nullable: true }),
-  status: { type: 'enum', values: RECORD_STATUSES },
+  status: { type: 'enum', values: DEVICE_STATUSES },
   installedAt: { type: 'datetime', nullable: true },
-  lastSeenAt: { type: 'datetime', nullable: true },
 };
 
 const list = {
   query: {
     ...paginationQuery,
+    search: text({ maxLength: 100 }),
     roomId: { type: 'uuid' },
-    status: { type: 'enum', values: RECORD_STATUSES },
+    buildingId: { type: 'uuid' },
+    status: { type: 'enum', values: DEVICE_STATUSES },
     deviceType: { type: 'enum', values: DEVICE_TYPES },
   },
 };
@@ -35,24 +36,13 @@ const create = {
     model: fields.model,
     status: fields.status,
     installedAt: fields.installedAt,
-    lastSeenAt: fields.lastSeenAt,
   },
 };
 
 const update = {
   params: idParams,
   body: fields,
-  requireAny: [
-    'roomId',
-    'name',
-    'deviceCode',
-    'deviceType',
-    'manufacturer',
-    'model',
-    'status',
-    'installedAt',
-    'lastSeenAt',
-  ],
+  requireAny: ['roomId', 'name', 'deviceCode', 'deviceType', 'manufacturer', 'model', 'status', 'installedAt'],
 };
 
 module.exports = { list, byId, create, update };

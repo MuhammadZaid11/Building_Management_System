@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import Breadcrumbs from '../../components/common/Breadcrumbs'
 import ErrorState from '../../components/common/ErrorState'
 import LoadingState from '../../components/common/LoadingState'
@@ -60,6 +60,7 @@ export default function RoomDetailsPage() {
         <div><dt>Building</dt><dd>{floor.building.name}</dd></div>
       </dl>
       {room.description ? <p>{room.description}</p> : <p>No description.</p>}
+      <p><Link to={`/devices?roomId=${room.id}`}>View devices in this room</Link></p>
     </section>
   )
 }

@@ -7,6 +7,8 @@ import BuildingsPage from './pages/buildings/BuildingsPage'
 import BuildingDetailsPage from './pages/buildings/BuildingDetailsPage'
 import BuildingFloorsPage from './pages/buildings/BuildingFloorsPage'
 import Dashboard from './pages/dashboard/Dashboard'
+import DeviceDetailsPage from './pages/devices/DeviceDetailsPage'
+import DevicesPage from './pages/devices/DevicesPage'
 import FloorDetailsPage from './pages/floors/FloorDetailsPage'
 import RoomDetailsPage from './pages/rooms/RoomDetailsPage'
 import ZoneDetailsPage from './pages/zones/ZoneDetailsPage'
@@ -29,7 +31,8 @@ export default function App() {
             <Route path="/floors/:id" element={<FloorDetailsPage />} />
             <Route path="/zones/:id" element={<ZoneDetailsPage />} />
             <Route path="/rooms/:id" element={<RoomDetailsPage />} />
-            <Route path="/devices" element={<PlaceholderPage title="Devices" />} />
+            <Route path="/devices" element={<DevicesPage />} />
+            <Route path="/devices/:id" element={<DeviceDetailsPage />} />
             <Route path="/sensors" element={<PlaceholderPage title="Sensors" />} />
             <Route path="/alarms" element={<PlaceholderPage title="Alarms" />} />
             <Route path="/energy" element={<PlaceholderPage title="Energy" />} />

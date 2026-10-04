@@ -26,6 +26,10 @@ async function list(query) {
     where.zoneId = query.zoneId;
   }
 
+  if (query.buildingId) {
+    where.zone = { floor: { buildingId: query.buildingId } };
+  }
+
   return findPage(prisma.room, {
     where,
     page: query.page,

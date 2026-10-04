@@ -237,7 +237,7 @@ List endpoints default to `page=1` and `limit=20`. The maximum `limit` is 100. R
 | GET, PUT, DELETE | `/api/v1/zones/:id` | |
 | GET, POST | `/api/v1/rooms` | Filter with `zoneId` |
 | GET, PUT, DELETE | `/api/v1/rooms/:id` | |
-| GET, POST | `/api/v1/devices` | Filter with `roomId`, `status`, or `deviceType` |
+| GET, POST | `/api/v1/devices` | Filter with `search`, `roomId`, `buildingId`, `status`, or `deviceType` |
 | GET, PUT, DELETE | `/api/v1/devices/:id` | |
 | GET, POST | `/api/v1/sensors` | Filter with `deviceId` |
 | GET, PUT, DELETE | `/api/v1/sensors/:id` | |
@@ -246,7 +246,7 @@ List endpoints default to `page=1` and `limit=20`. The maximum `limit` is 100. R
 | GET, POST | `/api/v1/alarms` | Filter with `status`, `severity`, or `buildingId` |
 | GET, PUT | `/api/v1/alarms/:id` | Alarms cannot be deleted |
 
-Device `status` is `ACTIVE` or `INACTIVE`. Device `deviceType` is one of `HVAC`, `LIGHT`, `ENERGY_METER`, `TEMPERATURE_SENSOR`, `HUMIDITY_SENSOR`, `SMOKE_SENSOR`, `MOTION_SENSOR`, and `WATER_LEAK_SENSOR`. Alarm `severity` is `LOW`, `MEDIUM`, `HIGH`, or `CRITICAL`. Alarm `status` is `ACTIVE`, `ACKNOWLEDGED`, or `RESOLVED`.
+Device `status` is `ONLINE`, `OFFLINE`, `MAINTENANCE`, or `DISABLED`. Device `deviceType` is one of `HVAC`, `LIGHT`, `ENERGY_METER`, `TEMPERATURE_SENSOR`, `HUMIDITY_SENSOR`, `SMOKE_SENSOR`, `MOTION_SENSOR`, and `WATER_LEAK_SENSOR`. Building `status` stays `ACTIVE` or `INACTIVE`. Alarm `severity` is `LOW`, `MEDIUM`, `HIGH`, or `CRITICAL`. Alarm `status` is `ACTIVE`, `ACKNOWLEDGED`, or `RESOLVED`.
 
 `GET /api/health` is public. Every `/api/v1` route except registration, login, refresh, and logout requires `Authorization: Bearer <accessToken>`.
 
@@ -363,12 +363,12 @@ A role that is not allowed for the route:
 | Role | Access |
 | --- | --- |
 | `SUPER_ADMIN` | Full access, including users, buildings, structure, devices, sensors, readings, and alarms. Building deletion is limited to this role. |
-| `BUILDING_MANAGER` | View buildings. Create and update buildings. Manage floors, zones, and rooms. View devices, sensors, and readings. View alarms and acknowledge them. |
+| `BUILDING_MANAGER` | View buildings. Create and update buildings. Manage floors, zones, and rooms. Create, update, and delete devices. View sensors and readings. View alarms and acknowledge them. |
 | `FACILITY_MANAGER` | View buildings, floors, zones, and rooms. Manage devices and sensors. View readings. Create and update alarms. |
 | `TECHNICIAN` | View buildings, structure, devices, sensors, readings, and alarms. Update a device's `status` only. Acknowledge alarms. |
 | `VIEWER` | Read-only access to buildings, structure, devices, sensors, readings, and alarms. |
 
-There is no building-assignment table yet, so a technician can read the same building records as the other authenticated roles. Writes stay limited to device status and alarm acknowledgement.
+There is no building-assignment table yet, so device access is by role rather than by an assigned building. A technician can read the same records as the other authenticated roles. Technician writes stay limited to device status and alarm acknowledgement.
 
 Authorization is centralized in `backend/src/auth/permissions.js`. Routes call `authorize('permission')` instead of checking roles inside controllers. A technician device update that includes any field other than `status` is rejected. A building manager or technician can set an alarm to `ACKNOWLEDGED` only.
 
@@ -425,7 +425,9 @@ Protected API
 | `/floors/:id` | Authenticated floor details and its zones. |
 | `/zones/:id` | Authenticated zone details and its rooms. |
 | `/rooms/:id` | Authenticated room details. |
-| `/devices`, `/sensors`, `/alarms`, `/energy` | Authenticated placeholders. |
+| `/devices` | Authenticated device list. Search, filters, and pagination come from the API. |
+| `/devices/:id` | Authenticated device details, location, and any configured sensors. |
+| `/sensors`, `/alarms`, `/energy` | Authenticated placeholders. |
 | `/settings` | Authenticated placeholder. The sidebar link is shown to `SUPER_ADMIN` only. |
 
 The browser keeps the access token and refresh token in `sessionStorage` for the current tab. The password is never stored. Axios adds `Authorization: Bearer <accessToken>` to API requests. A `401` on a protected request refreshes the session once through `POST /api/v1/auth/refresh`. If refresh fails, the app clears the session and returns to `/login`. Logout calls `POST /api/v1/auth/logout`, clears both tokens, and returns to `/login`.
@@ -479,6 +481,53 @@ Main Office Building
         └── Office 102
 ```
 
+## Devices
+
+A device is equipment installed in a room:
+
+```text
+Building
+└── Floor
+    └── Zone
+        └── Room
+            └── Device
+                └── Sensor
+```
+
+Supported types are `HVAC`, `LIGHT`, `ENERGY_METER`, `TEMPERATURE_SENSOR`, `HUMIDITY_SENSOR`, `SMOKE_SENSOR`, `MOTION_SENSOR`, and `WATER_LEAK_SENSOR`. Status is `ONLINE`, `OFFLINE`, `MAINTENANCE`, or `DISABLED`. `lastSeenAt` is displayed when the database has a value and otherwise shows "Never connected". The application does not invent or simulate that timestamp.
+
+| Action | Method and path | Roles |
+| --- | --- | --- |
+| List | `GET /api/v1/devices` | Every authenticated role |
+| Create | `POST /api/v1/devices` | `SUPER_ADMIN`, `BUILDING_MANAGER`, `FACILITY_MANAGER` |
+| Read | `GET /api/v1/devices/:id` | Every authenticated role |
+| Update | `PUT /api/v1/devices/:id` | Managers can update the record. `TECHNICIAN` can send `status` only. |
+| Delete | `DELETE /api/v1/devices/:id` | `SUPER_ADMIN`, `BUILDING_MANAGER`, `FACILITY_MANAGER` |
+
+List filters are `search` (name or code), `deviceType`, `status`, `buildingId`, and `roomId`. Pagination uses `page` (default 1) and `limit` (default 20, maximum 100). Device codes are unique. A device must reference an existing room. Deleting a device is rejected while sensors, readings, or alarms still depend on it. Those historical rows are not cascaded away.
+
+The device form loads buildings, then the floors of the selected building, then zones, then rooms. It does not download the whole hierarchy at once.
+
+Development seed equipment for Main Office Building, with no readings and no live connection:
+
+| Location | Device | Code | Status |
+| --- | --- | --- | --- |
+| Reception | Reception HVAC | `HVAC-RECEPTION-01` | `ONLINE` |
+| Server Room | Server Room HVAC | `HVAC-SERVER-01` | `ONLINE` |
+| Server Room | Server Temperature Sensor | `TEMP-SERVER-01` | `ONLINE` |
+| Server Room | Server Room Energy Meter | `METER-SERVER-01` | `MAINTENANCE` |
+| Office 101 | Office HVAC | `HVAC-OFFICE-101` | `OFFLINE` |
+| Office 101 | Office Temperature Sensor | `TEMP-OFFICE-101` | `ONLINE` |
+
+Reception HVAC and the server energy meter also have sensor definitions. The other seed devices have no sensors yet.
+
+Apply the device status migration and refresh seed data from the project root after the stack is up:
+
+```bash
+docker compose exec backend npx prisma migrate deploy
+docker compose exec backend npm run db:seed
+```
+
 ## Not in this phase
 
-Socket.IO, sensor simulation, and the device, sensor, alarm, and energy modules. Those sidebar links are placeholders.
+Socket.IO, sensor management, sensor readings, energy analytics, and alarm automation. The Sensors, Alarms, and Energy sidebar links remain placeholders. The dashboard still shows only the signed-in user and API health.

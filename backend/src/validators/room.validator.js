@@ -11,6 +11,7 @@ const list = {
   query: {
     ...paginationQuery,
     zoneId: { type: 'uuid' },
+    buildingId: { type: 'uuid' },
   },
 };
 

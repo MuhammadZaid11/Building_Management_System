@@ -3,10 +3,31 @@ const { assertFound } = require('../utils/apiError');
 const { onlyDefined } = require('../utils/data');
 const { findPage } = require('../utils/pagination');
 
-const roomSelect = { select: { id: true, name: true, roomNumber: true, zoneId: true } };
+const locationSelect = {
+  select: {
+    id: true,
+    name: true,
+    roomNumber: true,
+    zone: {
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        floor: {
+          select: {
+            id: true,
+            name: true,
+            floorNumber: true,
+            building: { select: { id: true, name: true, code: true } },
+          },
+        },
+      },
+    },
+  },
+};
 
 const detailInclude = {
-  room: roomSelect,
+  room: locationSelect,
   sensors: {
     orderBy: { name: 'asc' },
     select: {
@@ -14,13 +35,11 @@ const detailInclude = {
       name: true,
       sensorType: true,
       unit: true,
-      minValue: true,
-      maxValue: true,
     },
   },
 };
 
-async function list(query) {
+function filters(query) {
   const where = {};
 
   if (query.roomId) {
@@ -35,12 +54,27 @@ async function list(query) {
     where.deviceType = query.deviceType;
   }
 
+  if (query.buildingId) {
+    where.room = { zone: { floor: { buildingId: query.buildingId } } };
+  }
+
+  if (query.search) {
+    where.OR = [
+      { name: { contains: query.search, mode: 'insensitive' } },
+      { deviceCode: { contains: query.search, mode: 'insensitive' } },
+    ];
+  }
+
+  return where;
+}
+
+async function list(query) {
   return findPage(prisma.device, {
-    where,
+    where: filters(query),
     page: query.page,
     limit: query.limit,
     orderBy: [{ name: 'asc' }, { id: 'asc' }],
-    include: { room: roomSelect },
+    include: { room: locationSelect },
   });
 }
 
@@ -56,7 +90,7 @@ async function getById(id) {
 async function create(input) {
   return prisma.device.create({
     data: onlyDefined(input),
-    include: { room: roomSelect },
+    include: { room: locationSelect },
   });
 }
 

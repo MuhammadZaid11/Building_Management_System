@@ -17,6 +17,10 @@ function duplicateMessage(error) {
     return 'A zone with this code already exists on this floor';
   }
 
+  if (target.includes('deviceCode') || target.includes('device_code')) {
+    return 'A device with this code already exists';
+  }
+
   if (target.includes('code')) {
     return 'A record with this code already exists';
   }

@@ -132,6 +132,7 @@ async function upsertDevice(tx, roomId, device) {
       manufacturer: device.manufacturer,
       model: device.model,
       status: device.status,
+      installedAt: device.installedAt,
     },
     create: {
       roomId,
@@ -234,7 +235,7 @@ async function main() {
       description: 'Network and server equipment room.',
     });
 
-    await upsertRoom(tx, officeZone.id, {
+    const office101 = await upsertRoom(tx, officeZone.id, {
       name: 'Office 101',
       roomNumber: '101',
       description: 'Open staff office.',
@@ -252,7 +253,7 @@ async function main() {
       deviceType: 'HVAC',
       manufacturer: 'Carrier',
       model: '40RU',
-      status: 'ACTIVE',
+      status: 'ONLINE',
       installedAt: new Date('2024-03-15T00:00:00.000Z'),
       sensors: [
         {
@@ -278,7 +279,7 @@ async function main() {
       deviceType: 'ENERGY_METER',
       manufacturer: 'Schneider Electric',
       model: 'PM5560',
-      status: 'ACTIVE',
+      status: 'MAINTENANCE',
       installedAt: new Date('2024-03-15T00:00:00.000Z'),
       sensors: [
         {
@@ -289,6 +290,50 @@ async function main() {
           maxValue: null,
         },
       ],
+    });
+
+    await upsertDevice(tx, serverRoom.id, {
+      name: 'Server Room HVAC',
+      deviceCode: 'HVAC-SERVER-01',
+      deviceType: 'HVAC',
+      manufacturer: 'Carrier',
+      model: '40RU',
+      status: 'ONLINE',
+      installedAt: new Date('2024-04-02T00:00:00.000Z'),
+      sensors: [],
+    });
+
+    await upsertDevice(tx, serverRoom.id, {
+      name: 'Server Temperature Sensor',
+      deviceCode: 'TEMP-SERVER-01',
+      deviceType: 'TEMPERATURE_SENSOR',
+      manufacturer: 'Honeywell',
+      model: 'T6',
+      status: 'ONLINE',
+      installedAt: new Date('2024-04-02T00:00:00.000Z'),
+      sensors: [],
+    });
+
+    await upsertDevice(tx, office101.id, {
+      name: 'Office HVAC',
+      deviceCode: 'HVAC-OFFICE-101',
+      deviceType: 'HVAC',
+      manufacturer: 'Daikin',
+      model: 'FXMQ',
+      status: 'OFFLINE',
+      installedAt: new Date('2024-05-10T00:00:00.000Z'),
+      sensors: [],
+    });
+
+    await upsertDevice(tx, office101.id, {
+      name: 'Office Temperature Sensor',
+      deviceCode: 'TEMP-OFFICE-101',
+      deviceType: 'TEMPERATURE_SENSOR',
+      manufacturer: 'Honeywell',
+      model: 'T6',
+      status: 'ONLINE',
+      installedAt: new Date('2024-05-10T00:00:00.000Z'),
+      sensors: [],
     });
   });
 
