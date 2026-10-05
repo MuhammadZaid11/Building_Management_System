@@ -1,6 +1,9 @@
+const http = require('http');
 const { loadEnv } = require('./config/env');
 const { prisma, checkDatabase } = require('./db/prisma');
 const { createApp } = require('./app');
+const { initSocket } = require('./socket');
+const realtime = require('./services/realtime.service');
 
 async function start() {
   const env = loadEnv();
@@ -20,7 +23,9 @@ async function start() {
   }
 
   const app = createApp({ env });
-  const server = app.listen(env.port, '0.0.0.0', () => {
+  const server = http.createServer(app);
+  const io = initSocket(server, env);
+  server.listen(env.port, '0.0.0.0', () => {
     console.log(`BMS API listening on port ${env.port}`);
   });
 
@@ -34,6 +39,8 @@ async function start() {
     shuttingDown = true;
     console.log(`${signal} received, shutting down`);
 
+    io.close();
+    realtime.detach();
     server.close(async () => {
       try {
         await prisma.$disconnect();

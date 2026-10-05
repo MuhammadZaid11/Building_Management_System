@@ -21,6 +21,14 @@ function duplicateMessage(error) {
     return 'A device with this code already exists';
   }
 
+  if (target.includes('workOrderNumber') || target.includes('work_order_number')) {
+    return 'A work order with this number already exists';
+  }
+
+  if (target.includes('deviceId') || target.includes('device_id')) {
+    return 'A sensor with this name already exists on the device';
+  }
+
   if (target.includes('code')) {
     return 'A record with this code already exists';
   }

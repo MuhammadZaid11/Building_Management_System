@@ -15,6 +15,9 @@ const deviceRoutes = require('./routes/device.routes');
 const sensorRoutes = require('./routes/sensor.routes');
 const readingRoutes = require('./routes/reading.routes');
 const alarmRoutes = require('./routes/alarm.routes');
+const energyRoutes = require('./routes/energy.routes');
+const maintenanceRoutes = require('./routes/maintenance.routes');
+const reportRoutes = require('./routes/report.routes');
 
 function createApp(options = {}) {
   const env = options.env || loadEnv();
@@ -36,6 +39,9 @@ function createApp(options = {}) {
   app.use('/api/v1/sensors', sensorRoutes);
   app.use('/api/v1/readings', readingRoutes);
   app.use('/api/v1/alarms', alarmRoutes);
+  app.use('/api/v1/energy', energyRoutes);
+  app.use('/api/v1/maintenance', maintenanceRoutes);
+  app.use('/api/v1/reports', reportRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

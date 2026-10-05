@@ -1,85 +1,35 @@
 const { prisma } = require('../db/prisma');
 const { ApiError, assertFound } = require('../utils/apiError');
-const { onlyDefined } = require('../utils/data');
+const realtime = require('./realtime.service');
 const { findPage } = require('../utils/pagination');
+const { locationSelect } = require('./device.service');
 
 const detailInclude = {
-  device: { select: { id: true, name: true, deviceCode: true, deviceType: true } },
+  device: {
+    select: {
+      id: true,
+      name: true,
+      deviceCode: true,
+      deviceType: true,
+      status: true,
+      room: locationSelect,
+    },
+  },
   building: { select: { id: true, name: true, code: true } },
   zone: { select: { id: true, name: true, code: true } },
+  sensor: {
+    select: {
+      id: true,
+      name: true,
+      sensorType: true,
+      unit: true,
+      minValue: true,
+      maxValue: true,
+    },
+  },
 };
 
-async function assertConsistentLocation(input, current = {}) {
-  const deviceId = input.deviceId !== undefined ? input.deviceId : current.deviceId;
-  const buildingId = input.buildingId !== undefined ? input.buildingId : current.buildingId;
-  const zoneId = input.zoneId !== undefined ? input.zoneId : current.zoneId;
-
-  if (!deviceId || !buildingId) {
-    return;
-  }
-
-  const device = await prisma.device.findUnique({
-    where: { id: deviceId },
-    select: {
-      room: {
-        select: {
-          zone: {
-            select: {
-              floor: { select: { buildingId: true } },
-            },
-          },
-        },
-      },
-    },
-  });
-
-  if (!device) {
-    throw new ApiError(400, 'RELATED_RECORD_NOT_FOUND', 'A related record was not found');
-  }
-
-  if (device.room.zone.floor.buildingId !== buildingId) {
-    throw new ApiError(400, 'VALIDATION_ERROR', 'Request validation failed', [
-      {
-        field: 'body.buildingId',
-        message: 'buildingId must be the building that contains the device',
-      },
-    ]);
-  }
-
-  if (!zoneId) {
-    return;
-  }
-
-  const zone = await prisma.zone.findUnique({
-    where: { id: zoneId },
-    select: { floor: { select: { buildingId: true } } },
-  });
-
-  if (!zone || zone.floor.buildingId !== buildingId) {
-    throw new ApiError(400, 'VALIDATION_ERROR', 'Request validation failed', [
-      {
-        field: 'body.zoneId',
-        message: 'zoneId must belong to the same building as the device',
-      },
-    ]);
-  }
-}
-
-function withStatusTimestamps(input) {
-  const data = { ...input };
-
-  if (data.status === 'ACKNOWLEDGED' && data.acknowledgedAt === undefined) {
-    data.acknowledgedAt = new Date();
-  }
-
-  if (data.status === 'RESOLVED' && data.resolvedAt === undefined) {
-    data.resolvedAt = new Date();
-  }
-
-  return data;
-}
-
-async function list(query) {
+function filters(query) {
   const where = {};
 
   if (query.status) {
@@ -90,12 +40,44 @@ async function list(query) {
     where.severity = query.severity;
   }
 
+  if (query.type) {
+    where.type = query.type;
+  }
+
   if (query.buildingId) {
     where.buildingId = query.buildingId;
   }
 
+  if (query.deviceId) {
+    where.deviceId = query.deviceId;
+  }
+
+  if (query.sensorId) {
+    where.sensorId = query.sensorId;
+  }
+
+  if (query.search) {
+    where.message = { contains: query.search, mode: 'insensitive' };
+  }
+
+  if (query.from || query.to) {
+    where.triggeredAt = {};
+
+    if (query.from) {
+      where.triggeredAt.gte = query.from;
+    }
+
+    if (query.to) {
+      where.triggeredAt.lte = query.to;
+    }
+  }
+
+  return where;
+}
+
+async function list(query) {
   return findPage(prisma.alarm, {
-    where,
+    where: filters(query),
     page: query.page,
     limit: query.limit,
     orderBy: [{ triggeredAt: 'desc' }, { id: 'desc' }],
@@ -112,24 +94,86 @@ async function getById(id) {
   return assertFound(alarm, 'Alarm not found');
 }
 
-async function create(input) {
-  await assertConsistentLocation(input);
-
-  return prisma.alarm.create({
-    data: onlyDefined(withStatusTimestamps(input)),
-    include: detailInclude,
+async function summary() {
+  const groups = await prisma.alarm.groupBy({
+    by: ['severity'],
+    where: { status: 'ACTIVE' },
+    _count: { _all: true },
   });
+
+  const counts = { low: 0, medium: 0, high: 0, critical: 0 };
+
+  groups.forEach((group) => {
+    counts[group.severity.toLowerCase()] = group._count._all;
+  });
+
+  counts.total = counts.low + counts.medium + counts.high + counts.critical;
+  return counts;
 }
 
-async function update(id, input) {
+function assertTransition(alarm, allowed, message) {
+  if (!allowed.includes(alarm.status)) {
+    throw new ApiError(409, 'INVALID_ALARM_TRANSITION', message);
+  }
+}
+
+function alarmEvent(alarm) {
+  return {
+    id: alarm.id,
+    type: alarm.type,
+    severity: alarm.severity,
+    status: alarm.status,
+    message: alarm.message,
+    deviceId: alarm.deviceId,
+    buildingId: alarm.buildingId,
+    sensorId: alarm.sensorId,
+    triggeredAt: alarm.triggeredAt,
+    acknowledgedAt: alarm.acknowledgedAt,
+    resolvedAt: alarm.resolvedAt,
+    previousStatus: alarm.previousStatus || null,
+    device: alarm.device ? { id: alarm.device.id, name: alarm.device.name } : null,
+    building: alarm.building ? { id: alarm.building.id, name: alarm.building.name } : null,
+  };
+}
+
+async function acknowledge(id) {
   const current = await getById(id);
-  await assertConsistentLocation(input, current);
+  assertTransition(
+    current,
+    ['ACTIVE'],
+    current.status === 'ACKNOWLEDGED'
+      ? 'This alarm is already acknowledged.'
+      : 'A resolved alarm cannot be acknowledged. A new alarm is created if the condition returns.'
+  );
 
-  return prisma.alarm.update({
+  const alarm = await prisma.alarm.update({
     where: { id },
-    data: onlyDefined(withStatusTimestamps(input)),
+    data: {
+      status: 'ACKNOWLEDGED',
+      acknowledgedAt: new Date(),
+    },
     include: detailInclude,
   });
+
+  realtime.emitAlarmAcknowledged(alarmEvent({ ...alarm, previousStatus: current.status }));
+  return alarm;
 }
 
-module.exports = { list, getById, create, update };
+async function resolve(id) {
+  const current = await getById(id);
+  assertTransition(current, ['ACTIVE', 'ACKNOWLEDGED'], 'This alarm is already resolved.');
+
+  const alarm = await prisma.alarm.update({
+    where: { id },
+    data: {
+      status: 'RESOLVED',
+      resolvedAt: new Date(),
+    },
+    include: detailInclude,
+  });
+
+  realtime.emitAlarmResolved(alarmEvent({ ...alarm, previousStatus: current.status }));
+  return alarm;
+}
+
+module.exports = { list, getById, summary, acknowledge, resolve };

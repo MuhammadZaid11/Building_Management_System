@@ -2,6 +2,7 @@ const ACCESS_KEY = 'bms.accessToken'
 const REFRESH_KEY = 'bms.refreshToken'
 
 const listeners = new Set()
+const tokenListeners = new Set()
 let sessionExpired = false
 
 export function getAccessToken() {
@@ -15,6 +16,12 @@ export function getRefreshToken() {
 export function saveTokens(accessToken, refreshToken) {
   sessionStorage.setItem(ACCESS_KEY, accessToken)
   sessionStorage.setItem(REFRESH_KEY, refreshToken)
+  tokenListeners.forEach((listener) => listener(accessToken))
+}
+
+export function onTokensSaved(listener) {
+  tokenListeners.add(listener)
+  return () => tokenListeners.delete(listener)
 }
 
 export function clearTokens() {

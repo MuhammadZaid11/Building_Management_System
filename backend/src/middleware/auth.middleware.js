@@ -81,29 +81,9 @@ function limitTechnicianDeviceUpdate(req, res, next) {
   next();
 }
 
-function limitAlarmAcknowledgement(req, res, next) {
-  if (!req.user || req.user.role === 'SUPER_ADMIN' || req.user.role === 'FACILITY_MANAGER') {
-    next();
-    return;
-  }
-
-  const body = req.body && typeof req.body === 'object' ? req.body : {};
-  const keys = Object.keys(body);
-  const allowed = new Set(['status', 'acknowledgedAt']);
-  const extra = keys.filter((key) => !allowed.has(key));
-
-  if (extra.length > 0 || body.status !== 'ACKNOWLEDGED') {
-    next(new ApiError(403, 'FORBIDDEN', 'You do not have permission to perform this action'));
-    return;
-  }
-
-  next();
-}
-
 module.exports = {
   authenticateToken,
   authorizeRoles,
   authorize,
   limitTechnicianDeviceUpdate,
-  limitAlarmAcknowledgement,
 };

@@ -1,6 +1,16 @@
 import Modal from './Modal'
 
-export default function ConfirmDialog({ title, message, confirmLabel = 'Delete', busy, error, onConfirm, onCancel }) {
+export default function ConfirmDialog({
+  title,
+  message,
+  confirmLabel = 'Delete',
+  busyLabel = 'Deleting...',
+  danger = true,
+  busy,
+  error,
+  onConfirm,
+  onCancel,
+}) {
   return (
     <Modal title={title} onClose={onCancel}>
       <p>{message}</p>
@@ -13,8 +23,8 @@ export default function ConfirmDialog({ title, message, confirmLabel = 'Delete',
         <button type="button" className="button button-quiet" onClick={onCancel} disabled={busy}>
           Cancel
         </button>
-        <button type="button" className="button button-danger" onClick={onConfirm} disabled={busy}>
-          {busy ? 'Deleting...' : confirmLabel}
+        <button type="button" className={danger ? 'button button-danger' : 'button button-primary'} onClick={onConfirm} disabled={busy}>
+          {busy ? busyLabel : confirmLabel}
         </button>
       </div>
     </Modal>

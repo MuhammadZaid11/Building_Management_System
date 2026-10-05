@@ -29,7 +29,7 @@ const create = {
   body: {
     sensorId: { type: 'uuid', required: true },
     value: { type: 'decimal', required: true },
-    recordedAt: { type: 'datetime', required: true },
+    recordedAt: { type: 'datetime' },
   },
 };
 

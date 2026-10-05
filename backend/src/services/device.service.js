@@ -1,7 +1,9 @@
 const { prisma } = require('../db/prisma');
-const { assertFound } = require('../utils/apiError');
+const { ApiError, assertFound } = require('../utils/apiError');
 const { onlyDefined } = require('../utils/data');
 const { findPage } = require('../utils/pagination');
+const { attachLatestReadings } = require('../utils/sensorReadings');
+const realtime = require('./realtime.service');
 
 const locationSelect = {
   select: {
@@ -35,6 +37,8 @@ const detailInclude = {
       name: true,
       sensorType: true,
       unit: true,
+      minValue: true,
+      maxValue: true,
     },
   },
 };
@@ -78,13 +82,21 @@ async function list(query) {
   });
 }
 
+async function withLatestSensorReadings(device) {
+  return {
+    ...device,
+    sensors: await attachLatestReadings(device.sensors || []),
+  };
+}
+
 async function getById(id) {
   const device = await prisma.device.findUnique({
     where: { id },
     include: detailInclude,
   });
 
-  return assertFound(device, 'Device not found');
+  assertFound(device, 'Device not found');
+  return withLatestSensorReadings(device);
 }
 
 async function create(input) {
@@ -95,20 +107,48 @@ async function create(input) {
 }
 
 async function update(id, input) {
-  await getById(id);
+  const current = await getById(id);
 
-  return prisma.device.update({
+  const device = await prisma.device.update({
     where: { id },
     data: onlyDefined(input),
     include: detailInclude,
   });
+
+  const updated = await withLatestSensorReadings(device);
+
+  if (input.status && input.status !== current.status) {
+    realtime.emitDeviceStatusChanged({
+      deviceId: updated.id,
+      status: updated.status,
+      updatedAt: updated.updatedAt,
+      buildingId: updated.room.zone.floor.building.id,
+    });
+  }
+
+  return updated;
 }
 
 async function remove(id) {
-  const existing = await prisma.device.findUnique({ where: { id }, select: { id: true } });
+  const existing = await prisma.device.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      _count: { select: { workOrders: true, maintenanceSchedules: true } },
+    },
+  });
   assertFound(existing, 'Device not found');
+
+  if (existing._count.workOrders > 0 || existing._count.maintenanceSchedules > 0) {
+    throw new ApiError(
+      409,
+      'DEVICE_HAS_MAINTENANCE_HISTORY',
+      'This device cannot be deleted because maintenance history depends on it'
+    );
+  }
+
   await prisma.device.delete({ where: { id } });
   return { id };
 }
 
-module.exports = { list, getById, create, update, remove };
+module.exports = { list, getById, create, update, remove, locationSelect };

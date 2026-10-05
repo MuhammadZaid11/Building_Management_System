@@ -1,3 +1,5 @@
+import LiveStatus from './LiveStatus'
+
 export default function TopNav({ user, menuOpen, onMenu, onLogout }) {
   return (
     <header className="topbar">
@@ -14,6 +16,7 @@ export default function TopNav({ user, menuOpen, onMenu, onLogout }) {
         <p className="user-name">{user?.name}</p>
         <p className="user-role">{user?.role}</p>
       </div>
+      <LiveStatus />
       <button type="button" className="button button-quiet" onClick={onLogout}>
         Log out
       </button>

@@ -40,6 +40,21 @@ enum DeviceType {
   @@map("device_type")
 }
 
+enum SensorType {
+  TEMPERATURE
+  HUMIDITY
+  SMOKE
+  MOTION
+  WATER_LEAK
+  ENERGY
+  POWER
+  VOLTAGE
+  CURRENT
+  PRESSURE
+
+  @@map("sensor_type")
+}
+
 enum AlarmSeverity {
   LOW
   MEDIUM
@@ -49,12 +64,57 @@ enum AlarmSeverity {
   @@map("alarm_severity")
 }
 
+enum AlarmType {
+  TEMPERATURE_HIGH
+  TEMPERATURE_LOW
+  HUMIDITY_HIGH
+  HUMIDITY_LOW
+  SMOKE_DETECTED
+  WATER_LEAK
+  SENSOR_OUT_OF_RANGE
+  DEVICE_OFFLINE
+  ENERGY_THRESHOLD
+
+  @@map("alarm_type")
+}
+
 enum AlarmStatus {
   ACTIVE
   ACKNOWLEDGED
   RESOLVED
 
   @@map("alarm_status")
+}
+
+enum MaintenanceFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  SEMI_ANNUALLY
+  ANNUALLY
+
+  @@map("maintenance_frequency")
+}
+
+enum WorkOrderStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+
+  @@map("work_order_status")
+}
+
+enum WorkOrderPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+
+  @@map("work_order_priority")
 }
 
 model Building {
@@ -67,8 +127,9 @@ model Building {
   createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  floors Floor[]
-  alarms Alarm[]
+  floors     Floor[]
+  alarms     Alarm[]
+  workOrders WorkOrder[]
 
   @@map("buildings")
 }
@@ -136,9 +197,11 @@ model Device {
   createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  room    Room     @relation(fields: [roomId], references: [id], onDelete: Restrict)
-  sensors Sensor[]
-  alarms  Alarm[]
+  room                 Room                  @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  sensors              Sensor[]
+  alarms               Alarm[]
+  maintenanceSchedules MaintenanceSchedule[]
+  workOrders           WorkOrder[]
 
   @@index([roomId])
   @@index([deviceType])
@@ -147,20 +210,22 @@ model Device {
 }
 
 model Sensor {
-  id         String   @id @default(uuid()) @db.Uuid
-  deviceId   String   @map("device_id") @db.Uuid
+  id         String     @id @default(uuid()) @db.Uuid
+  deviceId   String     @map("device_id") @db.Uuid
   name       String
-  sensorType String   @map("sensor_type")
+  sensorType SensorType @map("sensor_type")
   unit       String
-  minValue   Decimal? @map("min_value") @db.Decimal(14, 4)
-  maxValue   Decimal? @map("max_value") @db.Decimal(14, 4)
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  minValue   Decimal?   @map("min_value") @db.Decimal(14, 4)
+  maxValue   Decimal?   @map("max_value") @db.Decimal(14, 4)
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   device   Device          @relation(fields: [deviceId], references: [id], onDelete: Restrict)
   readings DeviceReading[]
+  alarms   Alarm[]
 
   @@unique([deviceId, name])
+  @@index([sensorType])
   @@map("sensors")
 }
 
@@ -173,6 +238,7 @@ model DeviceReading {
   sensor Sensor @relation(fields: [sensorId], references: [id], onDelete: Restrict)
 
   @@index([sensorId, recordedAt])
+  @@index([recordedAt])
   @@map("device_readings")
 }
 
@@ -181,7 +247,8 @@ model Alarm {
   deviceId       String        @map("device_id") @db.Uuid
   buildingId     String        @map("building_id") @db.Uuid
   zoneId         String?       @map("zone_id") @db.Uuid
-  type           String
+  sensorId       String?       @map("sensor_id") @db.Uuid
+  type           AlarmType
   severity       AlarmSeverity
   message        String
   status         AlarmStatus   @default(ACTIVE)
@@ -191,13 +258,20 @@ model Alarm {
   createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  device   Device   @relation(fields: [deviceId], references: [id], onDelete: Restrict)
-  building Building @relation(fields: [buildingId], references: [id], onDelete: Restrict)
-  zone     Zone?    @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  device     Device      @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  building   Building    @relation(fields: [buildingId], references: [id], onDelete: Restrict)
+  zone       Zone?       @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  sensor     Sensor?     @relation(fields: [sensorId], references: [id], onDelete: Restrict)
+  workOrders WorkOrder[]
 
   @@index([deviceId])
   @@index([buildingId, status, triggeredAt])
   @@index([zoneId])
+  @@index([status, triggeredAt])
+  @@index([resolvedAt])
+  @@index([severity])
+  @@index([type])
+  @@index([sensorId, type, status])
   @@map("alarms")
 }
 
@@ -222,9 +296,97 @@ model User {
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  refreshTokens RefreshToken[]
+  refreshTokens            RefreshToken[]
+  assignedWorkOrders       WorkOrder[]            @relation("WorkOrderAssignee")
+  createdWorkOrders        WorkOrder[]            @relation("WorkOrderCreator")
+  maintenanceActivities    MaintenanceActivity[]
+  createdMaintenanceSchedules MaintenanceSchedule[]
 
   @@map("users")
+}
+
+model MaintenanceSchedule {
+  id              String               @id @default(uuid()) @db.Uuid
+  deviceId        String               @map("device_id") @db.Uuid
+  title           String
+  description     String?
+  frequency       MaintenanceFrequency
+  nextDueAt       DateTime             @map("next_due_at") @db.Timestamptz(3)
+  lastCompletedAt DateTime?            @map("last_completed_at") @db.Timestamptz(3)
+  isActive        Boolean              @default(true) @map("is_active")
+  createdById     String               @map("created_by_id") @db.Uuid
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  device    Device @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  createdBy User   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([deviceId])
+  @@index([nextDueAt])
+  @@index([isActive])
+  @@map("maintenance_schedules")
+}
+
+model WorkOrder {
+  id               String            @id @default(uuid()) @db.Uuid
+  workOrderNumber  String            @unique @map("work_order_number")
+  title            String
+  description      String?
+  deviceId         String            @map("device_id") @db.Uuid
+  alarmId          String?           @map("alarm_id") @db.Uuid
+  buildingId       String            @map("building_id") @db.Uuid
+  assignedToId     String?           @map("assigned_to_id") @db.Uuid
+  createdById      String            @map("created_by_id") @db.Uuid
+  priority         WorkOrderPriority
+  status           WorkOrderStatus   @default(OPEN)
+  scheduledAt      DateTime?         @map("scheduled_at") @db.Timestamptz(3)
+  assignedAt       DateTime?         @map("assigned_at") @db.Timestamptz(3)
+  startedAt        DateTime?         @map("started_at") @db.Timestamptz(3)
+  heldAt           DateTime?         @map("held_at") @db.Timestamptz(3)
+  completedAt      DateTime?         @map("completed_at") @db.Timestamptz(3)
+  cancelledAt      DateTime?         @map("cancelled_at") @db.Timestamptz(3)
+  estimatedCost    Decimal?          @map("estimated_cost") @db.Decimal(12, 2)
+  actualCost       Decimal?          @map("actual_cost") @db.Decimal(12, 2)
+  completionNotes  String?           @map("completion_notes")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  device     Device                @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  alarm      Alarm?                @relation(fields: [alarmId], references: [id], onDelete: Restrict)
+  building   Building              @relation(fields: [buildingId], references: [id], onDelete: Restrict)
+  assignedTo User?                 @relation("WorkOrderAssignee", fields: [assignedToId], references: [id], onDelete: Restrict)
+  createdBy  User                  @relation("WorkOrderCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  activities MaintenanceActivity[]
+
+  @@index([deviceId])
+  @@index([alarmId])
+  @@index([buildingId])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([priority])
+  @@index([scheduledAt])
+  @@index([createdAt])
+  @@index([completedAt])
+  @@map("work_orders")
+}
+
+model MaintenanceActivity {
+  id            String   @id @default(uuid()) @db.Uuid
+  workOrderId   String   @map("work_order_id") @db.Uuid
+  performedById String   @map("performed_by_id") @db.Uuid
+  description   String
+  notes         String?
+  cost          Decimal? @db.Decimal(12, 2)
+  performedAt   DateTime @map("performed_at") @db.Timestamptz(3)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  performedBy User      @relation(fields: [performedById], references: [id], onDelete: Restrict)
+
+  @@index([workOrderId])
+  @@index([performedById])
+  @@index([performedAt])
+  @@map("maintenance_activities")
 }
 
 model RefreshToken {

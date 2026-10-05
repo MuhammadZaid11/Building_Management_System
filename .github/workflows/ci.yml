@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bms_test
+          POSTGRES_PASSWORD: bms_test_password
+          POSTGRES_DB: bms_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bms_test -d bms_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://bms_test:bms_test_password@localhost:5432/bms_test
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Apply Prisma migrations
+        run: npx prisma migrate deploy
+
+      - name: Test
+        run: npm test
+
+      - name: Audit dependencies
+        run: |
+          npm audit --audit-level=high || true
+          npm audit --json > "$RUNNER_TEMP/backend-audit.json" || true
+          node -e "const fs=require('fs'); const report=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/backend-audit.json','utf8')); const allowed=new Set(['deepmerge-ts','@prisma/config','prisma']); const blocked=Object.entries(report.vulnerabilities||{}).filter(([name,info])=>['high','critical'].includes(info.severity)&&!allowed.has(name)); if(blocked.length){ console.error(blocked.map(([name,info])=>name+' '+info.severity).join('\n')); process.exit(1);} console.log('No unexpected high or critical vulnerabilities.');"
+
+  frontend:
+    name: Frontend CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      VITE_API_URL: http://localhost:3000/api/v1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=high

@@ -24,7 +24,7 @@ api.interceptors.request.use((config) => {
 
 let refreshPromise = null
 
-async function refreshAccessToken() {
+export async function refreshAccessToken() {
   const refreshToken = getRefreshToken()
 
   if (!refreshToken) {

@@ -46,4 +46,32 @@ function resolveFrontendUrl(nodeEnv) {
   return '';
 }
 
-module.exports = { loadEnv };
+function energySettings() {
+  const rawCost = (process.env.ENERGY_COST_PER_KWH ?? '').trim();
+  const costPerKwh = rawCost === '' ? 0.25 : Number(rawCost);
+
+  if (!Number.isFinite(costPerKwh) || costPerKwh < 0) {
+    throw new Error('ENERGY_COST_PER_KWH must be a non-negative number');
+  }
+
+  const currency = (process.env.CURRENCY_CODE || 'USD').trim().toUpperCase();
+
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    throw new Error('CURRENCY_CODE must be a 3-letter currency code');
+  }
+
+  const rawTarget = (process.env.ENERGY_DAILY_TARGET_KWH ?? '').trim();
+  let dailyTargetKwh = null;
+
+  if (rawTarget !== '') {
+    dailyTargetKwh = Number(rawTarget);
+
+    if (!Number.isFinite(dailyTargetKwh) || dailyTargetKwh < 0) {
+      throw new Error('ENERGY_DAILY_TARGET_KWH must be a non-negative number');
+    }
+  }
+
+  return { costPerKwh, currency, dailyTargetKwh };
+}
+
+module.exports = { loadEnv, energySettings };
